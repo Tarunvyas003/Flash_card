@@ -1,24 +1,22 @@
 import streamlit as st
 import os
+import openai
 from dotenv import load_dotenv
 from pathlib import Path
 from PyPDF2 import PdfReader
-from openai import OpenAI
 
-# ✅ Load environment variables from .env file
+# ✅ Load API key from .env file
 load_dotenv()
-
-# ✅ Get the API key from environment
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     st.error("API key not found in .env file.")
     st.stop()
 
-# ✅ Initialize OpenAI client with key
-client = OpenAI(api_key=api_key)
+# ✅ Set API key globally
+openai.api_key = api_key
 
 # ---------------------------
-# PDF Text Extractor
+# Helper Function: Extract text from PDF
 # ---------------------------
 def extract_text(uploaded_file):
     uploaded_file.seek(0, os.SEEK_END)
@@ -36,67 +34,91 @@ def extract_text(uploaded_file):
     return text
 
 # ---------------------------
-# AI Helpers
+# OpenAI Response Functions
 # ---------------------------
 def generate_summary_from_text(text):
+    prompt = f"Summarize the following document in a concise manner, highlighting key points a student should know:\n\n{text}"
     messages = [
         {"role": "system", "content": "You are an educational assistant."},
-        {"role": "user", "content": f"Summarize the following document:\n\n{text}"}
+        {"role": "user", "content": prompt}
     ]
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+    completion = openai.ChatCompletion.create(
+        model="gpt-4o",
         messages=messages
     )
     return completion.choices[0].message.content.strip()
 
 def chat_with_document(text, conversation_history, user_query):
     messages = conversation_history + [
-        {"role": "user", "content": f"Based on the document:\n\n{text}\n\nQuestion: {user_query}"}
+        {"role": "user", "content": f"Based on the following document:\n\n{text}\n\nQuestion: {user_query}"}
     ]
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+    completion = openai.ChatCompletion.create(
+        model="gpt-4o",
         messages=messages
     )
     return completion.choices[0].message.content.strip()
 
 def generate_questions_from_text(text, num_questions):
+    prompt = (
+        f"Generate up to {num_questions} study questions with answers based on the following document.\n"
+        f"Return the output as a table with two columns: 'Question' and 'Answer'.\n\nDocument:\n\n{text}"
+    )
     messages = [
-        {"role": "system", "content": "You are an educational assistant."},
-        {"role": "user", "content": f"Generate {num_questions} study questions and answers from the following:\n\n{text}"}
+        {"role": "system", "content": "You are an educational assistant that generates study questions."},
+        {"role": "user", "content": prompt}
     ]
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+    completion = openai.ChatCompletion.create(
+        model="gpt-4o",
         messages=messages
     )
     return completion.choices[0].message.content.strip()
 
 def generate_flashcards_from_text(text, num_cards):
+    prompt = (
+        f"Generate {num_cards} flashcards based on the following document.\n\nDocument:\n\n{text}\n\n"
+        "Return a Python dictionary where each key is a flashcard question and the value is the answer."
+    )
     messages = [
-        {"role": "system", "content": "You are an assistant creating flashcards."},
-        {"role": "user", "content": f"Generate {num_cards} flashcards from the document. Return a Python dictionary with Question as key and Answer as value.\n\n{text}"}
+        {"role": "system", "content": "You are an educational assistant that creates flashcards."},
+        {"role": "user", "content": prompt}
     ]
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+    completion = openai.ChatCompletion.create(
+        model="gpt-4o",
         messages=messages
     )
     return completion.choices[0].message.content.strip()
 
 # ---------------------------
-# Streamlit App UI
+# Streamlit UI
 # ---------------------------
-st.title("📚 Study Guide AI Assistant")
+st.title("📘 Study Guide Generator")
 
-uploaded_file = st.file_uploader("Upload your PDF document", type="pdf")
+uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
 
 if uploaded_file:
-    st.success("✅ File uploaded successfully.")
-    text = extract_text(uploaded_file)
-    
-    if st.button("Generate Summary"):
-        with st.spinner("Generating summary..."):
-            summary = generate_summary_from_text(text)
-        st.subheader("Summary")
-        st.write(summary
+    raw_text = extract_text(uploaded_file)
+    if raw_text:
+        st.success("PDF loaded successfully!")
+
+        if st.button("Generate Summary"):
+            with st.spinner("Generating summary..."):
+                summary = generate_summary_from_text(raw_text)
+            st.subheader("📄 Summary")
+            st.write(summary)
+
+        num_q = st.slider("Number of Questions", 1, 10, 5)
+        if st.button("Generate Questions"):
+            with st.spinner("Generating questions..."):
+                questions = generate_questions_from_text(raw_text, num_q)
+            st.subheader("❓ Study Questions")
+            st.markdown(questions)
+
+        num_fc = st.slider("Number of Flashcards", 1, 10, 5)
+        if st.button("Generate Flashcards"):
+            with st.spinner("Generating flashcards..."):
+                flashcards = generate_flashcards_from_text(raw_text, num_fc)
+            st.subheader("🃏 Flashcards")
+            st.text(flashcards)
 
 
 
