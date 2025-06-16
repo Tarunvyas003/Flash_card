@@ -7,18 +7,17 @@ from PyPDF2 import PdfReader
 from openai import OpenAI
 import os
 from ast import literal_eval
+from dotenv import load_dotenv  # Load environment variables
 
-# Initialize the OpenAI client
+# Load API key from .env
+load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key = api_key)
-
-
+client = OpenAI(api_key=api_key)
 
 # ---------------------------
 # Helper Function: Extract text from PDF
 # ---------------------------
 def extract_text(uploaded_file):
-    # Check file size (max 10MB)
     uploaded_file.seek(0, os.SEEK_END)
     file_size = uploaded_file.tell()
     uploaded_file.seek(0)
@@ -34,12 +33,10 @@ def extract_text(uploaded_file):
     return text
 
 # ---------------------------
-# OpenAI Response Functions (using new style)
+# OpenAI Response Functions
 # ---------------------------
 def generate_summary_from_text(text):
-    prompt = (
-        f"Summarize the following document in a concise manner, highlighting the key points that a student should know:\n\n{text}"
-    )
+    prompt = f"Summarize the following document in a concise manner, highlighting key points a student should know:\n\n{text}"
     messages = [
         {"role": "system", "content": "You are an educational assistant."},
         {"role": "user", "content": prompt}
@@ -78,150 +75,7 @@ def generate_questions_from_text(text, num_questions):
 def generate_flashcards_from_text(text, num_cards):
     prompt = (
         f"Generate {num_cards} flashcards based on the following document.\n\nDocument:\n\n{text}\n\n"
-        "Return a Python dictionary where each key is a flashcard question and its corresponding value is the answer. "
-        "Do not include any additional text."
-    )
-    messages = [
-        {"role": "system", "content": "You are an educational assistant that creates study flashcards."},
-        {"role": "user", "content": prompt}
-    ]
-    completion = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages
-    )
-    output = completion.choices[0].message.content.strip()
-    try:
-        flashcards = literal_eval(output)
-        if isinstance(flashcards, dict):
-            return flashcards
-        else:
-            return {}
-    except Exception as e:
-        st.error(f"Error parsing flashcards: {e}")
-        return {}
-
-# ---------------------------
-# Sidebar: File Upload & Mode Selection
-# ---------------------------
-st.sidebar.title("Study Companion Setup")
-
-uploaded_pdf = st.sidebar.file_uploader("Upload your study PDF (max 10MB)", type="pdf")
-mode = st.sidebar.radio("Select Mode", ("Chat", "Test Your Knowledge"))# , "Flashcards"))
-
-# For Test Your Knowledge and Flashcards modes, allow number input.
-num_questions = None
-num_flashcards = None
-if mode == "Test Your Knowledge":
-    num_questions = st.sidebar.number_input("Number of questions to generate (max 50):", min_value=1, max_value=50, value=10, step=1)
-elif mode == "Flashcards":
-    num_flashcards = st.sidebar.number_input("Number of flashcards to generate (max 5):", min_value=1, max_value=5, value=3, step=1)
-
-# ---------------------------
-# Session State Initialization
-# ---------------------------
-if "pdf_text" not in st.session_state:
-    st.session_state.pdf_text = None
-if "summary" not in st.session_state:
-    st.session_state.summary = None
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = [{"role": "assistant", "content": "Hi, how can I help you with your study material?"}]
-if "questions_table" not in st.session_state:
-    st.session_state.questions_table = None
-if "flashcards" not in st.session_state:
-    st.session_state.flashcards = {}
-if "current_card" not in st.session_state:
-    st.session_state.current_card = 0
-if "score" not in st.session_state:
-    st.session_state.score = 0
-if "show_answer" not in st.session_state:
-    st.session_state.show_answer = False
-
-# ---------------------------
-# Process PDF Upload
-# ---------------------------
-if uploaded_pdf is not None:
-    st.session_state.pdf_text = extract_text(uploaded_pdf)
-    if st.session_state.pdf_text:
-        st.sidebar.success("PDF uploaded and processed successfully!")
-    else:
-        st.sidebar.error("Failed to extract text. Please check your PDF file.")
-
-# ---------------------------
-# Main Area: Mode-Based Display (all functions via side menu)
-# ---------------------------
-st.title("Study Companion 📚")
-
-if st.session_state.pdf_text is None:
-    st.info("Please upload a PDF from the sidebar to begin.")
-else:
-    if mode == "Chat":
-        st.header("Chat with Your Study Companion")
-        # Display persistent chat history
-        for msg in st.session_state.chat_history:
-            st.chat_message(msg["role"]).write(msg["content"])
-        user_question = st.chat_input("Ask a question about the document:")
-        if user_question:
-            st.session_state.chat_history.append({"role": "user", "content": user_question})
-            st.chat_message("user").write(user_question)
-            with st.spinner("Processing your question..."):
-                response = chat_with_document(st.session_state.pdf_text, st.session_state.chat_history, user_question)
-            st.session_state.chat_history.append({"role": "assistant", "content": response})
-            st.chat_message("assistant").write(response)
-
-    elif mode == "Test Your Knowledge":
-        st.header("Test Your Knowledge")
-        if num_questions is None:
-            st.info("Please specify the number of questions in the sidebar.")
-        else:
-            with st.spinner("Generating questions..."):
-                questions_output = generate_questions_from_text(st.session_state.pdf_text, num_questions)
-            # Assume the output is a table in markdown format
-            #st.markdown("### Generated Questions")
-            st.markdown(questions_output)
-            # Optionally, you can parse the table and display it with st.table if it's in a CSV-like format.
-
-    elif mode == "Flashcards":
-        st.header("Practice Flashcards")
-        if st.button("Generate Flashcards"):
-            with st.spinner("Generating flashcards..."):
-                flashcards = generate_flashcards_from_text(st.session_state.pdf_text, num_flashcards)
-            st.session_state.flashcards = flashcards
-            st.session_state.current_card = 0
-            st.session_state.score = 0
-            st.session_state.show_answer = False
-            st.success("Flashcards generated successfully!")
-        
-        if not st.session_state.flashcards:
-            st.info("No flashcards available. Click the button above to generate flashcards.")
-        else:
-            total_cards = len(st.session_state.flashcards)
-            if st.session_state.current_card >= total_cards:
-                st.success(f"You've completed all flashcards! Final Score: {st.session_state.score} / {total_cards}")
-                st.info("Restart the session or generate new flashcards from the sidebar.")
-            else:
-                flashcards = st.session_state.flashcards
-                current_keys = list(flashcards.keys())
-                current_question = current_keys[st.session_state.current_card]
-                current_answer = flashcards[current_question]
-                st.write(f"**Question:** {current_question}")
-                if st.button("Show Answer"):
-                    st.session_state.show_answer = True
-                if st.session_state.show_answer:
-                    st.write(f"**Answer:** {current_answer}")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("Correct"):
-                            st.session_state.score += 1
-                            st.success("Correct!")
-                    with col2:
-                        if st.button("Wrong"):
-                            st.error("Incorrect!")
-                    if st.button("Next Card"):
-                        st.session_state.current_card += 1
-                        st.session_state.show_answer = False
-                        st.rerun()
-                st.write(f"**Current Score:** {st.session_state.score} / {total_cards}")
-
+        "Return a Python dictionary where each key is a flas
 
 
 
