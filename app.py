@@ -1,21 +1,24 @@
 import streamlit as st
-import tempfile
-import json
-import random
+import os
+from dotenv import load_dotenv
 from pathlib import Path
 from PyPDF2 import PdfReader
 from openai import OpenAI
-import os
-from ast import literal_eval
-from dotenv import load_dotenv  # Load environment variables
 
-# Load API key from .env
+# ✅ Load environment variables from .env file
 load_dotenv()
+
+# ✅ Get the API key from environment
 api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    st.error("API key not found in .env file.")
+    st.stop()
+
+# ✅ Initialize OpenAI client with key
 client = OpenAI(api_key=api_key)
 
 # ---------------------------
-# Helper Function: Extract text from PDF
+# PDF Text Extractor
 # ---------------------------
 def extract_text(uploaded_file):
     uploaded_file.seek(0, os.SEEK_END)
@@ -33,13 +36,12 @@ def extract_text(uploaded_file):
     return text
 
 # ---------------------------
-# OpenAI Response Functions
+# AI Helpers
 # ---------------------------
 def generate_summary_from_text(text):
-    prompt = f"Summarize the following document in a concise manner, highlighting key points a student should know:\n\n{text}"
     messages = [
         {"role": "system", "content": "You are an educational assistant."},
-        {"role": "user", "content": prompt}
+        {"role": "user", "content": f"Summarize the following document:\n\n{text}"}
     ]
     completion = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -49,7 +51,7 @@ def generate_summary_from_text(text):
 
 def chat_with_document(text, conversation_history, user_query):
     messages = conversation_history + [
-        {"role": "user", "content": f"Based on the following document:\n\n{text}\n\nQuestion: {user_query}"}
+        {"role": "user", "content": f"Based on the document:\n\n{text}\n\nQuestion: {user_query}"}
     ]
     completion = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -58,13 +60,9 @@ def chat_with_document(text, conversation_history, user_query):
     return completion.choices[0].message.content.strip()
 
 def generate_questions_from_text(text, num_questions):
-    prompt = (
-        f"Generate up to {num_questions} study questions with answers based on the following document.\n"
-        f"Return the output as a table with two columns: 'Question' and 'Answer'.\n\nDocument:\n\n{text}"
-    )
     messages = [
-        {"role": "system", "content": "You are an educational assistant that generates study questions."},
-        {"role": "user", "content": prompt}
+        {"role": "system", "content": "You are an educational assistant."},
+        {"role": "user", "content": f"Generate {num_questions} study questions and answers from the following:\n\n{text}"}
     ]
     completion = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -73,9 +71,32 @@ def generate_questions_from_text(text, num_questions):
     return completion.choices[0].message.content.strip()
 
 def generate_flashcards_from_text(text, num_cards):
-    prompt = (
-        f"Generate {num_cards} flashcards based on the following document.\n\nDocument:\n\n{text}\n\n"
-        "Return a Python dictionary where each key is a flas
+    messages = [
+        {"role": "system", "content": "You are an assistant creating flashcards."},
+        {"role": "user", "content": f"Generate {num_cards} flashcards from the document. Return a Python dictionary with Question as key and Answer as value.\n\n{text}"}
+    ]
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages
+    )
+    return completion.choices[0].message.content.strip()
+
+# ---------------------------
+# Streamlit App UI
+# ---------------------------
+st.title("📚 Study Guide AI Assistant")
+
+uploaded_file = st.file_uploader("Upload your PDF document", type="pdf")
+
+if uploaded_file:
+    st.success("✅ File uploaded successfully.")
+    text = extract_text(uploaded_file)
+    
+    if st.button("Generate Summary"):
+        with st.spinner("Generating summary..."):
+            summary = generate_summary_from_text(text)
+        st.subheader("Summary")
+        st.write(summary
 
 
 
