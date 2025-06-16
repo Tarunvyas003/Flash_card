@@ -1,124 +1,84 @@
 import streamlit as st
-import os
-import openai
-from dotenv import load_dotenv
-from pathlib import Path
 from PyPDF2 import PdfReader
+import openai
 
-# ✅ Load API key from .env file
-load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    st.error("API key not found in .env file.")
-    st.stop()
-
-# ✅ Set API key globally
-openai.api_key = api_key
+# ✅ Hardcoded API key (only for testing)
+openai.api_key = "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"
 
 # ---------------------------
 # Helper Function: Extract text from PDF
 # ---------------------------
 def extract_text(uploaded_file):
-    uploaded_file.seek(0, os.SEEK_END)
-    file_size = uploaded_file.tell()
     uploaded_file.seek(0)
-    if file_size > 10 * 1024 * 1024:
-        st.error("File size exceeds 10MB limit.")
-        return ""
     pdf_reader = PdfReader(uploaded_file)
     text = ""
     for page in pdf_reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text + "\n"
+        content = page.extract_text()
+        if content:
+            text += content + "\n"
     return text
 
 # ---------------------------
-# OpenAI Response Functions
+# Generate summary from text
 # ---------------------------
-def generate_summary_from_text(text):
-    prompt = f"Summarize the following document in a concise manner, highlighting key points a student should know:\n\n{text}"
-    messages = [
-        {"role": "system", "content": "You are an educational assistant."},
-        {"role": "user", "content": prompt}
-    ]
-    completion = openai.ChatCompletion.create(
+def generate_summary(text):
+    response = openai.ChatCompletion.create(
         model="gpt-4o",
-        messages=messages
+        messages=[
+            {"role": "system", "content": "You are an educational assistant."},
+            {"role": "user", "content": f"Summarize this document:\n\n{text}"}
+        ]
     )
-    return completion.choices[0].message.content.strip()
+    return response.choices[0].message.content.strip()
 
-def chat_with_document(text, conversation_history, user_query):
-    messages = conversation_history + [
-        {"role": "user", "content": f"Based on the following document:\n\n{text}\n\nQuestion: {user_query}"}
-    ]
-    completion = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=messages
-    )
-    return completion.choices[0].message.content.strip()
-
-def generate_questions_from_text(text, num_questions):
+# ---------------------------
+# Generate flashcards from text
+# ---------------------------
+def generate_flashcards(text, num_cards=5):
     prompt = (
-        f"Generate up to {num_questions} study questions with answers based on the following document.\n"
-        f"Return the output as a table with two columns: 'Question' and 'Answer'.\n\nDocument:\n\n{text}"
+        f"Create {num_cards} flashcards based on the following document:\n\n{text}\n\n"
+        "Return them as a Python dictionary in the format {'Question': 'Answer'}."
     )
-    messages = [
-        {"role": "system", "content": "You are an educational assistant that generates study questions."},
-        {"role": "user", "content": prompt}
-    ]
-    completion = openai.ChatCompletion.create(
+    response = openai.ChatCompletion.create(
         model="gpt-4o",
-        messages=messages
+        messages=[
+            {"role": "system", "content": "You are a helpful tutor."},
+            {"role": "user", "content": prompt}
+        ]
     )
-    return completion.choices[0].message.content.strip()
-
-def generate_flashcards_from_text(text, num_cards):
-    prompt = (
-        f"Generate {num_cards} flashcards based on the following document.\n\nDocument:\n\n{text}\n\n"
-        "Return a Python dictionary where each key is a flashcard question and the value is the answer."
-    )
-    messages = [
-        {"role": "system", "content": "You are an educational assistant that creates flashcards."},
-        {"role": "user", "content": prompt}
-    ]
-    completion = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=messages
-    )
-    return completion.choices[0].message.content.strip()
+    output = response.choices[0].message.content.strip()
+    try:
+        flashcards = eval(output)
+        return flashcards if isinstance(flashcards, dict) else {}
+    except:
+        return {}
 
 # ---------------------------
 # Streamlit UI
 # ---------------------------
-st.title("📘 Study Guide Generator")
-
-uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
+st.set_page_config(page_title="Flashcard Generator")
+st.title("📚 AI Flashcard Generator")
+uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 
 if uploaded_file:
+    st.success("PDF uploaded successfully.")
     raw_text = extract_text(uploaded_file)
-    if raw_text:
-        st.success("PDF loaded successfully!")
 
+    if raw_text:
+        st.subheader("Document Summary")
         if st.button("Generate Summary"):
             with st.spinner("Generating summary..."):
-                summary = generate_summary_from_text(raw_text)
-            st.subheader("📄 Summary")
-            st.write(summary)
+                summary = generate_summary(raw_text)
+                st.text_area("Summary", summary, height=200)
 
-        num_q = st.slider("Number of Questions", 1, 10, 5)
-        if st.button("Generate Questions"):
-            with st.spinner("Generating questions..."):
-                questions = generate_questions_from_text(raw_text, num_q)
-            st.subheader("❓ Study Questions")
-            st.markdown(questions)
-
-        num_fc = st.slider("Number of Flashcards", 1, 10, 5)
+        st.subheader("Flashcards")
+        num = st.slider("Number of Flashcards", 1, 20, 5)
         if st.button("Generate Flashcards"):
             with st.spinner("Generating flashcards..."):
-                flashcards = generate_flashcards_from_text(raw_text, num_fc)
-            st.subheader("🃏 Flashcards")
-            st.text(flashcards)
+                cards = generate_flashcards(raw_text, num)
+                for q, a in cards.items():
+                    st.markdown(f"**Q:** {q}\n\n**A:** {a}")
+
 
 
 
