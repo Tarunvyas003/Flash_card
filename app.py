@@ -3,10 +3,7 @@ from PyPDF2 import PdfReader
 import openai
 
 # ✅ Hardcoded API key (only for testing)
-openai.api_key = "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"
-
-# ---------------------------
-# Helper Function: Extract text from PDF
+openai.api_key = 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
 # ---------------------------
 def extract_text(uploaded_file):
     uploaded_file.seek(0)
