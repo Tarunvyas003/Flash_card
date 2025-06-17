@@ -1,10 +1,16 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-import openai
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
 import ast
 
-# ✅ Set your new OpenAI API Key (for testing only)
-openai.api_key = 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
+# Load API key from .env
+load_dotenv()
+api_key = os.getenv("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")
+
+# Initialize OpenAI client
+client = OpenAI(api_key=api_key)
 
 # ---------------------------
 def extract_text(uploaded_file):
@@ -19,7 +25,7 @@ def extract_text(uploaded_file):
 
 # ---------------------------
 def generate_summary(text):
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are an educational assistant."},
@@ -34,7 +40,7 @@ def generate_flashcards(text, num_cards=5):
         f"Create {num_cards} flashcards based on the following document:\n\n{text}\n\n"
         "Return them as a Python dictionary in the format {'Question': 'Answer'}."
     )
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a helpful tutor."},
@@ -73,6 +79,7 @@ if uploaded_file:
                 cards = generate_flashcards(raw_text, num)
                 for q, a in cards.items():
                     st.markdown(f"**Q:** {q}\n\n**A:** {a}")
+
 
 
 
