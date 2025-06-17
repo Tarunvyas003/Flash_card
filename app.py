@@ -1,9 +1,11 @@
 import streamlit as st
 from PyPDF2 import PdfReader
 import openai
+import ast
 
-# ✅ Hardcoded API key (only for testing)
-openai.api_key = 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
+# ✅ Set API Key (use env variable in production)
+openai.api_key = "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"
+
 # ---------------------------
 def extract_text(uploaded_file):
     uploaded_file.seek(0)
@@ -16,8 +18,6 @@ def extract_text(uploaded_file):
     return text
 
 # ---------------------------
-# Generate summary from text
-# ---------------------------
 def generate_summary(text):
     response = openai.ChatCompletion.create(
         model="gpt-4o",
@@ -28,8 +28,6 @@ def generate_summary(text):
     )
     return response.choices[0].message.content.strip()
 
-# ---------------------------
-# Generate flashcards from text
 # ---------------------------
 def generate_flashcards(text, num_cards=5):
     prompt = (
@@ -45,7 +43,7 @@ def generate_flashcards(text, num_cards=5):
     )
     output = response.choices[0].message.content.strip()
     try:
-        flashcards = eval(output)
+        flashcards = ast.literal_eval(output)
         return flashcards if isinstance(flashcards, dict) else {}
     except:
         return {}
@@ -75,6 +73,7 @@ if uploaded_file:
                 cards = generate_flashcards(raw_text, num)
                 for q, a in cards.items():
                     st.markdown(f"**Q:** {q}\n\n**A:** {a}")
+
 
 
 
