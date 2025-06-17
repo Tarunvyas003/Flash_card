@@ -4,7 +4,7 @@ import openai
 import ast
 
 # ✅ Set your new OpenAI API Key (for testing only)
-openai.api_key = "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"
+openai.api_key = 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
 
 # ---------------------------
 def extract_text(uploaded_file):
