@@ -3,8 +3,8 @@ from PyPDF2 import PdfReader
 import openai
 import ast
 
-# ✅ Set API Key (use env variable in production)
-openai.api_key = "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"
+# ✅ Set your new OpenAI API Key (for testing only)
+openai.api_key = "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"
 
 # ---------------------------
 def extract_text(uploaded_file):
